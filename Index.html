@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moment Coefficient of Skewness Calculator</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;margin:0;background:#f4f7fb;color:#172033}
+  .wrap{max-width:1200px;margin:auto;padding:22px}
+  h1{margin:0 0 8px;color:#123b72}
+  .sub{margin:0 0 18px;color:#526176}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 4px 18px rgba(20,40,80,.08)}
+  .full{grid-column:1/-1}
+  table{width:100%;border-collapse:collapse;margin-top:10px}
+  th,td{border:1px solid #d9e1ec;padding:8px;text-align:center}
+  th{background:#eaf1fb;color:#163f73}
+  input{width:100%;padding:7px;border:1px solid #cbd6e5;border-radius:7px;text-align:center}
+  button{border:0;border-radius:8px;padding:10px 15px;cursor:pointer;background:#174a86;color:white;font-weight:700;margin:5px 4px 0 0}
+  button.secondary{background:#6b778a}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+  .metric{padding:12px;border-radius:10px;background:#f0f5fb}
+  .metric b{display:block;font-size:12px;color:#607089}
+  .metric span{font-size:21px;font-weight:700;color:#123b72}
+  .formula{background:#f7f9fc;border-left:4px solid #174a86;padding:10px 14px;margin:10px 0;line-height:1.7}
+  canvas{width:100%;height:340px;border:1px solid #dce4ef;border-radius:10px;background:#fff}
+  .interpret{padding:13px;border-radius:10px;background:#eef8f0;margin-top:12px}
+  .note{font-size:13px;color:#64748b}
+  @media(max-width:800px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.metrics{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Moment Coefficient of Skewness (β₁)</h1>
+  <p class="sub">Step-deviation method — enter grouped data and visualize the shape of the distribution.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>1. Data & Assumed Mean</h2>
+      <label>Assumed mean A: <input id="A" type="number" value="35" step="0.01"></label>
+      <label style="display:block;margin-top:10px">Class width h: <input id="h" type="number" value="10" step="0.01"></label>
+      <table>
+        <thead><tr><th>Class</th><th>Frequency f</th></tr></thead>
+        <tbody id="dataBody"></tbody>
+      </table>
+      <button onclick="addRow()">+ Add row</button>
+      <button onclick="loadExample()">Load Example 4.2</button>
+      <button class="secondary" onclick="clearRows()">Clear</button>
+    </div>
+
+    <div class="card">
+      <h2>2. Step-Deviation Computation</h2>
+      <div class="formula">
+        x = class midpoint<br>
+        u = (x − A) / h<br>
+        μ₂ = h² Σfu² / N<br>
+        μ₃ = h³ Σfu³ / N<br>
+        <b>β₁ = μ₃² / μ₂³</b>
+      </div>
+      <div class="metrics">
+        <div class="metric"><b>N</b><span id="N">—</span></div>
+        <div class="metric"><b>Mean</b><span id="mean">—</span></div>
+        <div class="metric"><b>μ₂</b><span id="mu2">—</span></div>
+        <div class="metric"><b>μ₃</b><span id="mu3">—</span></div>
+        <div class="metric"><b>SD σ</b><span id="sd">—</span></div>
+        <div class="metric"><b>β₁</b><span id="beta">—</span></div>
+        <div class="metric"><b>γ₁</b><span id="gamma">—</span></div>
+        <div class="metric"><b>Σfu</b><span id="sumfu">—</span></div>
+      </div>
+      <div id="interpret" class="interpret">Enter data and press Calculate.</div>
+      <button onclick="calculate()">Calculate</button>
+    </div>
+
+    <div class="card full">
+      <h2>3. Calculation Table</h2>
+      <table>
+        <thead>
+          <tr><th>Class</th><th>f</th><th>x</th><th>u</th><th>fu</th><th>fu²</th><th>fu³</th></tr>
+        </thead>
+        <tbody id="calcBody"></tbody>
+      </table>
+    </div>
+
+    <div class="card full">
+      <h2>4. Frequency Graph & Skewness Shape</h2>
+      <canvas id="chart" width="1100" height="340"></canvas>
+      <p class="note">The bars show class frequencies. The dashed vertical line marks the mean. A longer right tail indicates positive skewness; a longer left tail indicates negative skewness.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const example = [
+  ["0–10",6],["10–20",12],["20–30",22],["30–40",24],
+  ["40–50",16],["50–60",12],["60–70",8]
+];
+
+function makeRow(cls="",f=""){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td><input class="cls" value="${cls}"></td><td><input class="freq" type="number" value="${f}" min="0" step="1"></td>`;
+  return tr;
+}
+function loadExample(){
+  const b=document.getElementById("dataBody"); b.innerHTML="";
+  example.forEach(r=>b.appendChild(makeRow(r[0],r[1])));
+  document.getElementById("A").value=35;
+  document.getElementById("h").value=10;
+  calculate();
+}
+function addRow(){document.getElementById("dataBody").appendChild(makeRow());}
+function clearRows(){document.getElementById("dataBody").innerHTML="";document.getElementById("calcBody").innerHTML="";draw([]);}
+function parseClass(s){
+  const nums=s.match(/-?\d+(?:\.\d+)?/g);
+  if(!nums || nums.length<2) return null;
+  return [parseFloat(nums[0]),parseFloat(nums[1])];
+}
+function calculate(){
+  const A=parseFloat(document.getElementById("A").value)||0;
+  const h=parseFloat(document.getElementById("h").value)||1;
+  const rows=[...document.querySelectorAll("#dataBody tr")];
+  let data=[],N=0;
+  rows.forEach(r=>{
+    const c=parseClass(r.querySelector(".cls").value);
+    const f=parseFloat(r.querySelector(".freq").value);
+    if(c && isFinite(f) && f>=0){
+      const x=(c[0]+c[1])/2;
+      data.push({label:r.querySelector(".cls").value,f,x});
+      N+=f;
+    }
+  });
+  if(!N){document.getElementById("interpret").textContent="Please enter valid grouped data.";return;}
+  let sumfu=0,sumfu2=0,sumfu3=0,sumfx=0;
+  const cb=document.getElementById("calcBody");cb.innerHTML="";
+  data.forEach(d=>{
+    const u=(d.x-A)/h, fu=d.f*u, fu2=d.f*u*u, fu3=d.f*u*u*u;
+    d.u=u;
+    sumfu+=fu;sumfu2+=fu2;sumfu3+=fu3;sumfx+=d.f*d.x;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${d.label}</td><td>${fmt(d.f)}</td><td>${fmt(d.x)}</td><td>${fmt(u)}</td><td>${fmt(fu)}</td><td>${fmt(fu2)}</td><td>${fmt(fu3)}</td>`;
+    cb.appendChild(tr);
+  });
+  const mean=sumfx/N;
+  const mu2=h*h*sumfu2/N;
+  const mu3=h*h*h*sumfu3/N;
+  const sd=Math.sqrt(mu2);
+  const beta=(mu2===0)?NaN:(mu3*mu3)/(mu2*mu2*mu2);
+  const gamma=(mu2===0)?NaN:mu3/Math.pow(mu2,1.5);
+  setText("N",fmt(N));setText("mean",fmt(mean));setText("mu2",fmt(mu2));
+  setText("mu3",fmt(mu3));setText("sd",fmt(sd));setText("beta",fmt(beta,4));
+  setText("gamma",fmt(gamma,4));setText("sumfu",fmt(sumfu));
+  let text;
+  if(mu3>1e-10) text=`β₁ = ${fmt(beta,4)}. Since μ₃ is positive, the distribution is positively (right) skewed.`;
+  else if(mu3<-1e-10) text=`β₁ = ${fmt(beta,4)}. Since μ₃ is negative, the distribution is negatively (left) skewed.`;
+  else text=`β₁ = ${fmt(beta,4)}. Since μ₃ = 0, the distribution is approximately symmetric.`;
+  document.getElementById("interpret").innerHTML=`<b>Interpretation:</b> ${text}`;
+  draw(data,mean);
+}
+function setText(id,v){document.getElementById(id).textContent=v}
+function fmt(v,d=2){return Number(v).toFixed(d).replace(/\.00$/,"")}
+function draw(data,mean){
+  const c=document.getElementById("chart"),ctx=c.getContext("2d");
+  ctx.clearRect(0,0,c.width,c.height);
+  if(!data.length)return;
+  const pad={l:60,r:25,t:25,b:65}, W=c.width-pad.l-pad.r,H=c.height-pad.t-pad.b;
+  const maxF=Math.max(...data.map(d=>d.f));
+  ctx.strokeStyle="#8ea0b8";ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pad.l,pad.t);ctx.lineTo(pad.l,pad.t+H);ctx.lineTo(pad.l+W,pad.t+H);ctx.stroke();
+  const bw=W/data.length*0.72, gap=W/data.length;
+  ctx.fillStyle="#4b78b8";ctx.font="14px Arial";ctx.textAlign="center";
+  data.forEach((d,i)=>{
+    const x=pad.l+i*gap+(gap-bw)/2;
+    const bh=d.f/maxF*H;
+    ctx.fillRect(x,pad.t+H-bh,bw,bh);
+    ctx.fillStyle="#172033";ctx.fillText(d.label,x+bw/2,pad.t+H+24);
+    ctx.fillText(d.f,x+bw/2,pad.t+H-bh-8);
+    ctx.fillStyle="#4b78b8";
+  });
+  const minX=data[0].x-(data[1]?.x-data[0].x||1);
+  const maxX=data[data.length-1].x+(data[1]?.x-data[0].x||1);
+  const mx=pad.l+(mean-minX)/(maxX-minX)*W;
+  ctx.save();ctx.setLineDash([8,6]);ctx.strokeStyle="#c54a4a";ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(mx,pad.t);ctx.lineTo(mx,pad.t+H);ctx.stroke();ctx.restore();
+  ctx.fillStyle="#c54a4a";ctx.fillText("Mean = "+fmt(mean),mx,pad.t-6);
+}
+loadExample();
+</script>
+</body>
+</html>
